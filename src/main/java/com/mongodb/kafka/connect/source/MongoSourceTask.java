@@ -41,6 +41,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.bson.UuidRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,7 +148,15 @@ public class MongoSourceTask extends SourceTask {
 
     mongoClient =
         MongoClients.create(
-            sourceConfig.getConnectionString(), getMongoDriverInformation(CONNECTOR_TYPE));
+            MongoClientSettings
+                .builder()
+                .applyConnectionString(sourceConfig.getConnectionString())
+                // https://mongodb.github.io/mongo-java-driver/3.8/javadoc/org/bson/codecs/UuidCodec.html#encode-org.bson.BsonWriter-java.util.UUID-org.bson.codecs.EncoderContext-
+                // https://mongodb.github.io/mongo-java-driver/3.8/javadoc/org/bson/codecs/UuidCodec.html#encode-org.bson.BsonWriter-java.util.UUID-org.bson.codecs.EncoderContext-
+                .uuidRepresentation(UuidRepresentation.STANDARD)
+                .build(),
+            getMongoDriverInformation(CONNECTOR_TYPE)
+        ) ;
     if (shouldCopyData()) {
       setCachedResultAndResumeToken();
       copyDataManager = new MongoCopyDataManager(sourceConfig, mongoClient);
