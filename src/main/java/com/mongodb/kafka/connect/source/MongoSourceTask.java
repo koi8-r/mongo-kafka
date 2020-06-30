@@ -48,6 +48,10 @@ import org.bson.BsonDocument;
 import org.bson.BsonDocumentWrapper;
 import org.bson.Document;
 
+import org.bson.json.JsonWriterSettings ;
+import org.bson.json.JsonMode ;
+import com.mongodb.kafka.connect.source.converter.* ;
+
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCommandException;
 import com.mongodb.client.ChangeStreamIterable;
@@ -96,6 +100,13 @@ import com.mongodb.kafka.connect.Versions;
 public class MongoSourceTask extends SourceTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MongoSourceTask.class);
   private static final String CONNECTOR_TYPE = "source";
+
+  private static final JsonWriterSettings jsonWriterSettings = JsonWriterSettings
+      .builder()
+      .outputMode(JsonMode.RELAXED)
+      .objectIdConverter(new ObjectIdConverter())
+      .dateTimeConverter(new DateTimeConverter())
+      .build() ;
 
   private final Time time;
   private final AtomicBoolean isRunning = new AtomicBoolean();
@@ -174,7 +185,7 @@ public class MongoSourceTask extends SourceTask {
         BsonDocument changeStreamDocument = next.get();
 
         Map<String, String> sourceOffset = new HashMap<>();
-        sourceOffset.put("_id", changeStreamDocument.getDocument("_id").toJson());
+        sourceOffset.put("_id", changeStreamDocument.getDocument("_id").toJson(jsonWriterSettings));
         if (isCopying.get()) {
           sourceOffset.put("copy", "true");
         }
@@ -186,16 +197,16 @@ public class MongoSourceTask extends SourceTask {
         Optional<String> jsonDocument = Optional.empty();
         if (publishFullDocumentOnly) {
           if (changeStreamDocument.containsKey("fullDocument")) {
-            jsonDocument = Optional.of(changeStreamDocument.getDocument("fullDocument").toJson());
+            jsonDocument = Optional.of(changeStreamDocument.getDocument("fullDocument").toJson(jsonWriterSettings));
           }
         } else {
-          jsonDocument = Optional.of(changeStreamDocument.toJson());
+          jsonDocument = Optional.of(changeStreamDocument.toJson(jsonWriterSettings));
         }
 
         jsonDocument.ifPresent(
             (json) -> {
               LOGGER.trace("Adding {} to {}: {}", json, topicName, sourceOffset);
-              String keyJson = new BsonDocument("_id", changeStreamDocument.get("_id")).toJson();
+              String keyJson = new BsonDocument("_id", changeStreamDocument.get("_id")).toJson(jsonWriterSettings);
               sourceRecords.add(
                   new SourceRecord(
                       partition,
