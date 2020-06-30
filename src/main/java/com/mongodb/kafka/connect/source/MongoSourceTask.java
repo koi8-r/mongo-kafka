@@ -51,6 +51,9 @@ import org.bson.Document;
 
 import org.bson.json.JsonWriterSettings ;
 import org.bson.json.JsonMode ;
+import static org.bson.codecs.configuration.CodecRegistries.fromCodecs ;
+import static org.bson.codecs.configuration.CodecRegistries.fromRegistries ;
+import com.mongodb.kafka.connect.source.codec.JsonUuidCodec ;
 import com.mongodb.kafka.connect.source.converter.* ;
 
 import com.mongodb.MongoClientSettings;
@@ -150,9 +153,11 @@ public class MongoSourceTask extends SourceTask {
         MongoClients.create(
             MongoClientSettings
                 .builder()
+                .codecRegistry(fromRegistries(
+                    fromCodecs(new JsonUuidCodec()),
+                    MongoClientSettings.getDefaultCodecRegistry()
+                ))
                 .applyConnectionString(sourceConfig.getConnectionString())
-                // https://mongodb.github.io/mongo-java-driver/3.8/javadoc/org/bson/codecs/UuidCodec.html#encode-org.bson.BsonWriter-java.util.UUID-org.bson.codecs.EncoderContext-
-                // https://mongodb.github.io/mongo-java-driver/3.8/javadoc/org/bson/codecs/UuidCodec.html#encode-org.bson.BsonWriter-java.util.UUID-org.bson.codecs.EncoderContext-
                 .uuidRepresentation(UuidRepresentation.STANDARD)
                 .build(),
             getMongoDriverInformation(CONNECTOR_TYPE)
