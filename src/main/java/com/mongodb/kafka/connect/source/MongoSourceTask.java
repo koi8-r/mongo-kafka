@@ -226,9 +226,9 @@ public class MongoSourceTask extends SourceTask {
                       partition,
                       sourceOffset,
                       topicName,
-                      Schema.BYTES_SCHEMA, // Schema.STRING_SCHEMA
+                      Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA
                       keyJson,
-                      Schema.BYTES_SCHEMA, // Schema.STRING_SCHEMA,
+                      Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA
                       json));
             });
 
