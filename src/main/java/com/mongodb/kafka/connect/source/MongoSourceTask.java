@@ -220,15 +220,16 @@ public class MongoSourceTask extends SourceTask {
         jsonDocument.ifPresent(
             (json) -> {
               LOGGER.trace("Adding {} to {}: {}", json, topicName, sourceOffset);
-              String keyJson = new BsonDocument("_id", changeStreamDocument.get("_id")).toJson(jsonWriterSettings);
+              // String keyJson = new BsonDocument("_id", changeStreamDocument.get("_id")).toJson(jsonWriterSettings);
               sourceRecords.add(
                   new SourceRecord(
                       partition,
                       sourceOffset,
                       topicName,
                       Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA
-                      keyJson,
-                      Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA
+                      // keyJson,
+                      changeStreamDocument.get("_id").asObjectId().getValue().toHexString(),
+                      Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA json.getBytes()
                       json));
             });
 
