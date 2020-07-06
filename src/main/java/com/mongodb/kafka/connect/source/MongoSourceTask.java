@@ -41,7 +41,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.bson.UuidRepresentation;
+import org.bson.codecs.DecoderContext ;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,12 +49,8 @@ import org.bson.BsonDocument;
 import org.bson.BsonDocumentWrapper;
 import org.bson.Document;
 
-import org.bson.json.JsonWriterSettings ;
-import org.bson.json.JsonMode ;
-import static org.bson.codecs.configuration.CodecRegistries.fromCodecs ;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries ;
-import com.mongodb.kafka.connect.source.codec.JsonUuidCodec ;
-import com.mongodb.kafka.connect.source.converter.* ;
+import com.mongodb.kafka.connect.source.codec.JsonDocumentCodec ;
 
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCommandException;
@@ -105,13 +101,6 @@ public class MongoSourceTask extends SourceTask {
   private static final Logger LOGGER = LoggerFactory.getLogger(MongoSourceTask.class);
   private static final String CONNECTOR_TYPE = "source";
 
-  private static final JsonWriterSettings jsonWriterSettings = JsonWriterSettings
-      .builder()
-      .outputMode(JsonMode.RELAXED)
-      .objectIdConverter(new ObjectIdConverter())
-      .dateTimeConverter(new DateTimeConverter())
-      .build() ;
-
   private final Time time;
   private final AtomicBoolean isRunning = new AtomicBoolean();
   private final AtomicBoolean isCopying = new AtomicBoolean();
@@ -124,6 +113,8 @@ public class MongoSourceTask extends SourceTask {
   private MongoCopyDataManager copyDataManager;
   private BsonDocument cachedResult;
   private BsonDocument cachedResumeToken;
+
+  private static final JsonDocumentCodec jsonCodec = new JsonDocumentCodec() ;
 
   private MongoCursor<BsonDocument> cursor;
 
@@ -154,11 +145,11 @@ public class MongoSourceTask extends SourceTask {
             MongoClientSettings
                 .builder()
                 .codecRegistry(fromRegistries(
-                    fromCodecs(new JsonUuidCodec()),
+                    // fromCodecs(new JsonUuidCodec(true)),
                     MongoClientSettings.getDefaultCodecRegistry()
                 ))
                 .applyConnectionString(sourceConfig.getConnectionString())
-                .uuidRepresentation(UuidRepresentation.STANDARD)
+                // .uuidRepresentation(UuidRepresentation.STANDARD)
                 .build(),
             getMongoDriverInformation(CONNECTOR_TYPE)
         ) ;
@@ -199,7 +190,7 @@ public class MongoSourceTask extends SourceTask {
         BsonDocument changeStreamDocument = next.get();
 
         Map<String, String> sourceOffset = new HashMap<>();
-        sourceOffset.put("_id", changeStreamDocument.getDocument("_id").toJson(jsonWriterSettings));
+        sourceOffset.put("_id", changeStreamDocument.getDocument("_id").toJson());
         if (isCopying.get()) {
           sourceOffset.put("copy", "true");
         }
@@ -209,26 +200,47 @@ public class MongoSourceTask extends SourceTask {
                 prefix, changeStreamDocument.getDocument("ns", new BsonDocument()));
 
         Optional<String> jsonDocument = Optional.empty();
+        BsonDocument bsonDoc = null ;
+
         if (publishFullDocumentOnly) {
-          if (changeStreamDocument.containsKey("fullDocument")) {
-            jsonDocument = Optional.of(changeStreamDocument.getDocument("fullDocument").toJson(jsonWriterSettings));
-          }
+            if (changeStreamDocument.containsKey("fullDocument"))
+              bsonDoc = changeStreamDocument.getDocument("fullDocument") ;
         } else {
-          jsonDocument = Optional.of(changeStreamDocument.toJson(jsonWriterSettings));
+          bsonDoc = changeStreamDocument ;
         }
+        if (bsonDoc != null) {
+            jsonDocument = Optional.of(
+                jsonCodec.decode(
+                    bsonDoc.asBsonReader(), DecoderContext.builder().build()
+                ).toJson(jsonCodec.getJsonWriterSettings(), jsonCodec)
+            ) ;
+        }
+
+        /*
+        // static
+        Schema KS = SchemaBuilder.struct()
+            .name("com.mongodb.kafka.connect.source.Key")
+            .version(1)
+            .field("owner", Schema.STRING_SCHEMA)
+            .build() ;
+        Struct K = new Struct(KS).put("owner", "me") ;
+        */
 
         jsonDocument.ifPresent(
             (json) -> {
               LOGGER.trace("Adding {} to {}: {}", json, topicName, sourceOffset);
-              // String keyJson = new BsonDocument("_id", changeStreamDocument.get("_id")).toJson(jsonWriterSettings);
+              String keyJson = new BsonDocument("_id", changeStreamDocument.get("_id")).toJson();
+              // Better is to use STRUCT instead of STRING and extract KEY data from document for composite key (https://github.com/confluentinc/examples/blob/5.0.0-post/connect-streams-pipeline/jdbcjson-connector.properties)
+              // Or make the work here - create composite key below
+              // Include Json[fullDocument] String itself to queryable struct
               sourceRecords.add(
                   new SourceRecord(
                       partition,
                       sourceOffset,
                       topicName,
                       Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA
-                      // keyJson,
-                      changeStreamDocument.get("_id").asObjectId().getValue().toHexString(),
+                      keyJson,
+                      // changeStreamDocument.get("_id").asObjectId().getValue().toHexString(),
                       Schema.STRING_SCHEMA,  // Schema.BYTES_SCHEMA json.getBytes()
                       json));
             });

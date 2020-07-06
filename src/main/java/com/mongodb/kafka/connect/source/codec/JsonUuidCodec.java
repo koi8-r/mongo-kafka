@@ -22,7 +22,7 @@ public class JsonUuidCodec extends UuidCodec implements Codec<UUID> {
     }
 
     public JsonUuidCodec(final boolean forceStringRepresentation) {
-        super(UuidRepresentation.STANDARD) ;
+        super(UuidRepresentation.JAVA_LEGACY) ;
         this.forceStringRepresentation = forceStringRepresentation ;
     }
 
