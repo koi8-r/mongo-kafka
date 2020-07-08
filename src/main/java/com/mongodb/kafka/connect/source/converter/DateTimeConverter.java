@@ -13,7 +13,9 @@ import java.util.Date ;
 
 public class DateTimeConverter implements Converter<Long> {
     private static final Logger LOGGER = LoggerFactory.getLogger(DateTimeConverter.class) ;
-    static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_INSTANT.withZone(ZoneId.of("UTC")) ;
+    static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX")
+            .withZone(ZoneId.of("UTC")) ;
 
     @Override
     public void convert(Long value, StrictJsonWriter writer) {
